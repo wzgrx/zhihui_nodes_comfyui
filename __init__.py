@@ -1,3 +1,28 @@
+import subprocess
+import os
+
+# ================= 全局子进程乱码修复补丁 =================
+# 拦截系统底层的 Popen，防止在 Windows GBK 环境下因读取含中文的命令输出而触发 utf-8 解码崩溃 (0xb2)
+_original_popen = subprocess.Popen
+
+class SafePopen(_original_popen):
+    def __init__(self, *args, **kwargs):
+        # 只要子进程启用了文本读取模式（text=True 或指定了 encoding）
+        is_text_mode = (
+            kwargs.get('text', False) or 
+            kwargs.get('universal_newlines', False) or 
+            (kwargs.get('encoding') is not None)
+        )
+        # 强制添加 errors='ignore'，遇到乱码时自动忽略，而不是抛出异常
+        if is_text_mode and 'errors' not in kwargs:
+            kwargs['errors'] = 'ignore'
+            
+        super().__init__(*args, **kwargs)
+
+# 替换系统底层的 Popen 为我们的安全版本
+subprocess.Popen = SafePopen
+# ========================================================
+
 from .Nodes.PromptPreset.PromptPresetOneChoice import PromptPresetOneChoice
 from .Nodes.PromptPreset.PromptPresetMultipleChoice import PromptPresetMultipleChoice
 from .Nodes.ImageEditingPresets.ImageEditingPresets import ImageEditingPresets
@@ -63,8 +88,6 @@ from .Nodes.IntNode import IntNode
 from .Nodes.PromptExpander import PromptExpander
 from .Nodes.LMStudio.lmstudio_node import LMStudioNode
 from .Nodes.LMStudio import lmstudio_api
-
-import os
 
 NODE_CLASS_MAPPINGS = {
     "PromptPresetOneChoice": PromptPresetOneChoice,
